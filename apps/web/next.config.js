@@ -6,6 +6,9 @@ const nextConfig = {
   typescript: {
     tsconfigPath: "./tsconfig.json",
   },
+  images: {
+    unoptimized: false, // Enable image optimization for Vercel
+  },
   webpack: (config) => {
     config.externals.push({
       "utf-8-validate": "commonjs utf-8-validate",
@@ -13,6 +16,9 @@ const nextConfig = {
     });
     return config;
   },
+  // Vercel-specific optimizations
+  productionBrowserSourceMaps: false, // Reduce bundle size
+  poweredByHeader: false, // Remove X-Powered-By header
 };
 
 module.exports = nextConfig;

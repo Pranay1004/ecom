@@ -183,6 +183,38 @@ Key principles:
 3. QA checklist generation
 4. Customer tracking + status updates
 
+## Deployment
+
+### Development (Local)
+
+```bash
+# Start all services
+pnpm dev
+
+# Services will run at:
+# - Frontend: http://localhost:3000
+# - API: http://localhost:3000/api/trpc
+# - Python Engine: http://localhost:8001
+# - Database: localhost:5432
+```
+
+### Production (Vercel)
+
+Deploy the Next.js frontend to Vercel:
+
+```bash
+git push origin main  # Automatic deployment via Vercel
+# OR
+vercel --prod
+```
+
+**For complete deployment instructions, see [VERCEL_DEPLOYMENT.md](./VERCEL_DEPLOYMENT.md)**
+
+Key requirements:
+- PostgreSQL database (Vercel Postgres or external)
+- Environment variables configured in Vercel dashboard
+- Python engine deployed separately (Render, Railway, AWS)
+
 ---
 
 **Built for billions. Every number counts.**
