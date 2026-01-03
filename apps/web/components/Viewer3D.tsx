@@ -1,6 +1,63 @@
 "use client";
 
+import React, { Suspense, useMemo } from "react";
+import { Canvas } from "@react-three/fiber";
+import { OrbitControls } from "@react-three/drei";
 import { useEstimator } from "@/lib/store";
+import { STLLoader } from "three/examples/jsm/loaders/STLLoader";
+import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
+import { ColladaLoader } from "three/examples/jsm/loaders/ColladaLoader";
+import { ThreeMFLoader } from "three/examples/jsm/loaders/3MFLoader";
+import { useLoader } from "@react-three/fiber";
+import * as THREE from "three";
+
+function Model({ url, ext }: { url: string; ext: string }) {
+  const object = useMemo(() => url, [url]);
+
+  // select loader based on extension
+  if (ext === "stl") {
+    const geom = useLoader(STLLoader, object);
+    return (
+      <mesh geometry={geom}>
+        <meshStandardMaterial color="#8EA" metalness={0.1} roughness={0.6} />
+      </mesh>
+    );
+  }
+
+  if (ext === "obj") {
+    const obj = useLoader(OBJLoader, object);
+    return <primitive object={obj} />;
+  }
+
+  if (ext === "gltf" || ext === "glb") {
+    const gltf = useLoader(GLTFLoader, object);
+    return <primitive object={gltf.scene} />;
+  }
+
+  if (ext === "dae") {
+    const collada = useLoader(ColladaLoader, object);
+    return <primitive object={collada.scene} />;
+  }
+
+  if (ext === "3mf") {
+    const threeMF = useLoader(ThreeMFLoader, object);
+    return <primitive object={threeMF.scene || threeMF} />;
+  }
+
+  // fallback: try GLTF loader
+  try {
+    const gltf = useLoader(GLTFLoader, object);
+    return <primitive object={gltf.scene} />;
+  } catch (e) {
+    return (
+      <mesh>
+        <boxGeometry args={[1, 1, 1]} />
+        <meshStandardMaterial color={"#666"} />
+      </mesh>
+    );
+  }
+}
 
 export function Viewer3D() {
   const { uploadedFile } = useEstimator();
@@ -13,18 +70,19 @@ export function Viewer3D() {
     );
   }
 
+  const ext = uploadedFile.fileName.split('.').pop()?.toLowerCase() || '';
+
   return (
     <div className="rounded-xl bg-slate-900 p-4">
-      <div className="h-96 rounded-lg bg-slate-800 flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-4xl mb-2">🎬</p>
-          <p className="text-sm text-slate-400">
-            Three.js viewer will render here
-          </p>
-          <p className="text-xs text-slate-500 mt-2">
-            Geometry: {uploadedFile.fileName}
-          </p>
-        </div>
+      <div className="h-96 rounded-lg bg-slate-800">
+        <Canvas camera={{ position: [0, 0, 200] }}>
+          <ambientLight intensity={0.8} />
+          <directionalLight position={[0, 0, 1]} intensity={0.6} />
+          <Suspense fallback={null}>
+            <Model url={uploadedFile.fileUrl || ''} ext={ext} />
+          </Suspense>
+          <OrbitControls enablePan={true} enableZoom={true} />
+        </Canvas>
       </div>
 
       <div className="mt-4 grid grid-cols-3 gap-2">

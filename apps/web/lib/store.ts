@@ -9,6 +9,10 @@ interface UploadedFile {
   estimatedMass: number;
   complexityIndex: number;
   warnings: string[];
+  fileUrl?: string | null;
+  hasOverhangs?: boolean;
+  minWallThickness?: number;
+  featureCount?: number;
 }
 
 interface EstimatorState {

@@ -45,20 +45,46 @@ export function FileUpload() {
 
     setIsAnalyzing(true);
 
-    // Simulate analysis (real: send to backend)
-    setTimeout(() => {
+    try {
+      const engineUrl =
+        (process.env.NEXT_PUBLIC_ENGINE_URL as string) || "http://localhost:8001";
+      const form = new FormData();
+      form.append("file", file, file.name);
+
+      const resp = await fetch(`${engineUrl}/analyze`, {
+        method: "POST",
+        body: form,
+      });
+
+      if (!resp.ok) {
+        const text = await resp.text();
+        throw new Error(`Analysis failed: ${resp.status} ${text}`);
+      }
+
+      const json = await resp.json();
+
+      // create local object URL for viewer
+      const url = URL.createObjectURL(file);
+
       setUploadedFile({
         fileHash: Math.random().toString(36),
         fileName: file.name,
-        boundingBox: { x: 100, y: 80, z: 60 },
-        volume: 480000,
-        surfaceArea: 47200,
-        estimatedMass: 0.576,
-        complexityIndex: 0.65,
-        warnings: ["Thin walls detected", "Overhangs present"],
+        boundingBox: json.boundingBox,
+        volume: json.volume,
+        surfaceArea: json.surfaceArea,
+        estimatedMass: json.estimatedMass,
+        complexityIndex: json.complexityIndex,
+        warnings: json.warnings || [],
+        fileUrl: url,
+        hasOverhangs: json.hasOverhangs,
+        minWallThickness: json.minWallThickness,
+        featureCount: json.featureCount,
       });
+    } catch (err) {
+      alert((err as Error).message || "Failed to analyze file");
+    } finally {
       setIsAnalyzing(false);
-    }, 2000);
+    }
   };
 
   return (
