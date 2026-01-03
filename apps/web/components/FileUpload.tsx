@@ -25,8 +25,12 @@ export function FileUpload() {
   };
 
   const handleFile = async (file: File) => {
-    if (!["model/step", "model/stl", "application/sla"].includes(file.type)) {
-      alert("Unsupported format. Please upload STEP, STL, or SLA files.");
+    // Check file extension (more reliable than MIME type for CAD files)
+    const extension = file.name.split(".").pop()?.toLowerCase();
+    const validExtensions = ["step", "stp", "stl", "obj", "sla"];
+    
+    if (!extension || !validExtensions.includes(extension)) {
+      alert("Unsupported format. Please upload STEP, STL, OBJ, or SLA files.");
       return;
     }
 
@@ -68,7 +72,7 @@ export function FileUpload() {
         ref={fileRef}
         type="file"
         className="hidden"
-        accept=".step,.stp,.stl,.obj"
+        accept=".step,.stp,.stl,.obj,.sla"
         onChange={(e) => e.target.files && handleFile(e.target.files[0])}
       />
 
