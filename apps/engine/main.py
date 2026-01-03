@@ -61,12 +61,21 @@ async def analyze_geometry(file: UploadFile = File(...)) -> GeometryMetrics:
         if mesh_or_scene is None:
             raise HTTPException(status_code=400, detail="Unable to parse geometry file")
 
-        # If we got a Scene, combine into a single mesh
+        # Normalize loader output to a single Trimesh mesh
+        mesh = None
         if isinstance(mesh_or_scene, trimesh.Scene):
             scene = mesh_or_scene
             if len(scene.geometry) == 0:
                 raise HTTPException(status_code=400, detail="No geometry found in file")
             mesh = trimesh.util.concatenate(tuple(scene.geometry.values()))
+        elif isinstance(mesh_or_scene, list) or isinstance(mesh_or_scene, tuple):
+            if len(mesh_or_scene) == 0:
+                raise HTTPException(status_code=400, detail="No geometry found in file")
+            mesh = trimesh.util.concatenate(tuple(mesh_or_scene))
+        elif isinstance(mesh_or_scene, dict):
+            if len(mesh_or_scene) == 0:
+                raise HTTPException(status_code=400, detail="No geometry found in file")
+            mesh = trimesh.util.concatenate(tuple(mesh_or_scene.values()))
         else:
             mesh = mesh_or_scene
 

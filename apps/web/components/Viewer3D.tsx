@@ -1,6 +1,6 @@
 "use client";
 
-import React, { Suspense, useMemo } from "react";
+import React, { Suspense, useEffect, useMemo, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import { useEstimator } from "@/lib/store";
@@ -9,54 +9,80 @@ import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 import { ColladaLoader } from "three/examples/jsm/loaders/ColladaLoader";
 import { ThreeMFLoader } from "three/examples/jsm/loaders/3MFLoader";
-import { useLoader } from "@react-three/fiber";
 import * as THREE from "three";
 
-function Model({ url, ext }: { url: string; ext: string }) {
-  const object = useMemo(() => url, [url]);
+function ModelLoader({ url, ext }: { url: string; ext: string }) {
+  const [object, setObject] = useState<any>(null);
 
-  // select loader based on extension
-  if (ext === "stl") {
-    const geom = useLoader(STLLoader, object);
-    return (
-      <mesh geometry={geom}>
-        <meshStandardMaterial color="#8EA" metalness={0.1} roughness={0.6} />
-      </mesh>
-    );
-  }
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        if (!url) return;
+        const res = await fetch(url);
+        const buffer = await res.arrayBuffer();
 
-  if (ext === "obj") {
-    const obj = useLoader(OBJLoader, object);
-    return <primitive object={obj} />;
-  }
+        if (ext === "stl") {
+          const loader = new STLLoader();
+          const geom = loader.parse(buffer);
+          const mesh = new THREE.Mesh(geom, new THREE.MeshStandardMaterial({ color: 0x8eaa8e }));
+          if (!cancelled) setObject(mesh);
+          return;
+        }
 
-  if (ext === "gltf" || ext === "glb") {
-    const gltf = useLoader(GLTFLoader, object);
-    return <primitive object={gltf.scene} />;
-  }
+        if (ext === "obj") {
+          const loader = new OBJLoader();
+          const text = new TextDecoder().decode(buffer);
+          const obj = loader.parse(text);
+          if (!cancelled) setObject(obj);
+          return;
+        }
 
-  if (ext === "dae") {
-    const collada = useLoader(ColladaLoader, object);
-    return <primitive object={collada.scene} />;
-  }
+        if (ext === "gltf" || ext === "glb") {
+          const loader = new GLTFLoader();
+          // GLTFLoader.parse expects ArrayBuffer and an optional path
+          loader.parse(buffer, '', (gltf:any) => {
+            if (!cancelled) setObject(gltf.scene);
+          });
+          return;
+        }
 
-  if (ext === "3mf") {
-    const threeMF = useLoader(ThreeMFLoader, object);
-    return <primitive object={threeMF.scene || threeMF} />;
-  }
+        if (ext === "dae") {
+          const loader = new ColladaLoader();
+          const text = new TextDecoder().decode(buffer);
+          const collada = loader.parse(text);
+          if (!cancelled) setObject(collada.scene);
+          return;
+        }
 
-  // fallback: try GLTF loader
-  try {
-    const gltf = useLoader(GLTFLoader, object);
-    return <primitive object={gltf.scene} />;
-  } catch (e) {
-    return (
-      <mesh>
-        <boxGeometry args={[1, 1, 1]} />
-        <meshStandardMaterial color={"#666"} />
-      </mesh>
-    );
-  }
+        if (ext === "3mf") {
+          const loader = new ThreeMFLoader();
+          const result = loader.parse(buffer);
+          const scene = result.scene || result;
+          if (!cancelled) setObject(scene);
+          return;
+        }
+
+        // fallback: try gltf parse
+        try {
+          const loader = new GLTFLoader();
+          loader.parse(buffer, '', (gltf:any) => {
+            if (!cancelled) setObject(gltf.scene);
+          });
+        } catch (e) {
+          console.warn('Fallback parse failed', e);
+        }
+      } catch (e) {
+        console.error('Model load error', e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [url, ext]);
+
+  if (!object) return null;
+  return <primitive object={object} />;
 }
 
 export function Viewer3D() {
