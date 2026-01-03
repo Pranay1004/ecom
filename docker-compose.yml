@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: eshant
+      POSTGRES_PASSWORD: eshant_dev_password
+      POSTGRES_DB: eshant
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  engine:
+    build:
+      context: ./apps/engine
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://eshant:eshant_dev_password@db:5432/eshant
+    depends_on:
+      - db
+
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: ../Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://eshant:eshant_dev_password@db:5432/eshant
+      NEXT_PUBLIC_API_URL: http://localhost:3000
+    depends_on:
+      - db
+      - engine
+
+volumes:
+  postgres_data:

@@ -1,0 +1,172 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id        String     @id @default(cuid())
+  email     String     @unique
+  name      String?
+  company   String?
+  tier      UserTier   @default(STANDARD)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  
+  orders    Order[]
+  files     UploadedFile[]
+
+  @@map("users")
+}
+
+enum UserTier {
+  STANDARD
+  PROFESSIONAL
+  ENTERPRISE
+}
+
+model Material {
+  id                String    @id @default(cuid())
+  name              String    @unique
+  density           Float     // g/cm³
+  costPerGram       Float     // base cost
+  process           Process   @relation(fields: [processId], references: [id])
+  processId         String
+  
+  minWallThickness  Float     // mm
+  maxTemp           Float?    // °C
+  properties        String[]  // e.g., "flex", "heat-resistant", "biocompatible"
+  
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  orders            Order[]
+
+  @@map("materials")
+}
+
+model Process {
+  id                String    @id @default(cuid())
+  name              String    @unique // "FDM", "SLA", "SLS", "MJF", "METAL"
+  machineHourlyRate Float    // cost per hour
+  minFeatureSize    Float     // mm
+  maxBuildEnvelope  String    // "X,Y,Z" dimensions
+  supportRequired   Boolean
+  materials         Material[]
+  toleranceClasses  ToleranceClass[]
+  orders            Order[]
+  
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@map("processes")
+}
+
+model ToleranceClass {
+  id              String    @id @default(cuid())
+  name            String    // "STANDARD", "TIGHT", "CRITICAL"
+  process         Process   @relation(fields: [processId], references: [id])
+  processId       String
+  tolerance       Float     // ±mm
+  costMultiplier  Float     // 1.0x for standard
+  leadTimeBonus   Int       // hours added/removed
+  orders          Order[]
+  
+  @@unique([processId, name])
+  @@map("tolerance_classes")
+}
+
+model UploadedFile {
+  id            String    @id @default(cuid())
+  fileName      String
+  fileHash      String    @unique
+  user          User      @relation(fields: [userId], references: [id])
+  userId        String
+  
+  // Computed geometry metrics
+  boundingBox   String    // "X,Y,Z" dimensions
+  volume        Float     // mm³
+  surfaceArea   Float     // mm²
+  estimatedMass Float     // grams (at default density)
+  
+  // Feasibility flags
+  hasOverhangs      Boolean
+  minWallThickness  Float     // mm
+  featureCount      Int
+  complexityIndex   Float     // 0.0-1.5
+  
+  // Warnings
+  warnings      String[]
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  orders        Order[]
+
+  @@map("uploaded_files")
+}
+
+model Order {
+  id                String    @id @default(cuid())
+  user              User      @relation(fields: [userId], references: [id])
+  userId            String
+  file              UploadedFile @relation(fields: [fileId], references: [id])
+  fileId            String
+  
+  // Configuration
+  process           Process   @relation(fields: [processId], references: [id])
+  processId         String
+  material          Material  @relation(fields: [materialId], references: [id])
+  materialId        String
+  toleranceClass    ToleranceClass @relation(fields: [toleranceClassId], references: [id])
+  toleranceClassId  String
+  quantity          Int       @default(1)
+  finishLevel       FinishLevel @default(AS_PRINTED)
+  
+  // Pricing
+  materialCost      Float
+  machineTimeCost   Float
+  setupCost         Float
+  postProcessingCost Float
+  qaCost            Float
+  totalCost         Float
+  
+  // Timing
+  queueDepth        Int       // how many jobs ahead
+  estimatedPrintTime Int      // hours
+  estimatedLeadTime Int       // hours from now
+  
+  // Status
+  status            OrderStatus @default(PENDING_PAYMENT)
+  manufacturingNotes String?
+  
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@map("orders")
+}
+
+enum FinishLevel {
+  AS_PRINTED
+  CLEANED
+  MACHINED
+  POLISHED
+  PAINTED
+}
+
+enum OrderStatus {
+  PENDING_PAYMENT
+  CONFIRMED
+  SLICING
+  SCHEDULED
+  PRINTING
+  POST_PROCESSING
+  QA
+  READY_FOR_SHIPMENT
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
