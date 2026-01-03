@@ -1,5 +1,4 @@
 {
-  "extends": ["//"],
   "globalDependencies": ["**/.env", "**/.env.local"],
   "pipeline": {
     "dev": {
