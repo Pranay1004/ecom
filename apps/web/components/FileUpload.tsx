@@ -27,10 +27,19 @@ export function FileUpload() {
   const handleFile = async (file: File) => {
     // Check file extension (more reliable than MIME type for CAD files)
     const extension = file.name.split(".").pop()?.toLowerCase();
-    const validExtensions = ["step", "stp", "stl", "obj", "sla"];
+    const validExtensions = [
+      "step", "stp",  // STEP
+      "stl",          // STL
+      "obj",          // OBJ
+      "sla",          // SLA/Stereolithography
+      "3mf",          // 3D Manufacturing Format
+      "iges", "igs",  // IGES
+      "gltf", "glb",  // glTF
+      "dae",          // COLLADA
+    ];
     
     if (!extension || !validExtensions.includes(extension)) {
-      alert("Unsupported format. Please upload STEP, STL, OBJ, or SLA files.");
+      alert("Unsupported format. Please upload STEP, STL, OBJ, 3MF, SLA, IGES, glTF, or COLLADA files.");
       return;
     }
 
@@ -72,7 +81,7 @@ export function FileUpload() {
         ref={fileRef}
         type="file"
         className="hidden"
-        accept=".step,.stp,.stl,.obj,.sla"
+        accept=".step,.stp,.stl,.obj,.sla,.3mf,.iges,.igs,.gltf,.glb,.dae"
         onChange={(e) => e.target.files && handleFile(e.target.files[0])}
       />
 
@@ -80,7 +89,7 @@ export function FileUpload() {
         <div className="text-4xl">📦</div>
         <p className="text-lg font-medium text-slate-900">Upload your part</p>
         <p className="text-sm text-slate-600">
-          STEP, STL, or OBJ files. Up to 100 MB.
+          STEP, STL, 3MF, OBJ, IGES, glTF, or COLLADA. Up to 100 MB.
         </p>
       </div>
 
