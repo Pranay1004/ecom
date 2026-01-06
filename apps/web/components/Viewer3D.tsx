@@ -170,11 +170,50 @@ export function Viewer3D() {
 
   const [object, setObject] = useState<THREE.Object3D | null>(null);
   const [fallbackTried, setFallbackTried] = useState(false);
+  const [rotationAxis, setRotationAxis] = useState<"x" | "y" | "z">("y");
+  const [showWarnings, setShowWarnings] = useState(false);
 
   useEffect(() => {
     setObject(null);
     setFallbackTried(false);
+    setShowWarnings(false);
   }, [uploadedFile?.fileUrl, uploadedFile?.fileName]);
+
+  // Auto-rotate effect
+  useEffect(() => {
+    if (!object) return;
+    let animId: number;
+    let rotating = false;
+    const rotate = () => {
+      if (rotating && object) {
+        object.rotation[rotationAxis] += 0.02;
+        animId = requestAnimationFrame(rotate);
+      }
+    };
+    // Expose toggle on window for button
+    (window as any).__viewer_toggleRotate = () => {
+      rotating = !rotating;
+      if (rotating) rotate();
+      else cancelAnimationFrame(animId);
+    };
+    return () => {
+      cancelAnimationFrame(animId);
+      delete (window as any).__viewer_toggleRotate;
+    };
+  }, [object, rotationAxis]);
+
+  const handleRotate = () => {
+    (window as any).__viewer_toggleRotate?.();
+  };
+
+  const handleOrientation = () => {
+    if (!object) return;
+    // Cycle through orientations: reset → rotate X 90 → rotate Z 90
+    object.rotation.set(0, 0, 0);
+    const next = rotationAxis === "y" ? "x" : rotationAxis === "x" ? "z" : "y";
+    setRotationAxis(next);
+    object.rotation[next] = Math.PI / 2;
+  };
 
   if (!uploadedFile) {
     return (
@@ -282,16 +321,36 @@ export function Viewer3D() {
       </div>
 
       <div className="mt-4 grid grid-cols-3 gap-2">
-        <button className="rounded bg-slate-700 px-3 py-2 text-xs text-slate-200 hover:bg-slate-600">
+        <button
+          onClick={handleRotate}
+          className="rounded bg-slate-700 px-3 py-2 text-xs text-slate-200 hover:bg-slate-600"
+        >
           Rotate
         </button>
-        <button className="rounded bg-slate-700 px-3 py-2 text-xs text-slate-200 hover:bg-slate-600">
-          Show Warnings
+        <button
+          onClick={() => setShowWarnings((v) => !v)}
+          className="rounded bg-slate-700 px-3 py-2 text-xs text-slate-200 hover:bg-slate-600"
+        >
+          {showWarnings ? "Hide Warnings" : "Show Warnings"}
         </button>
-        <button className="rounded bg-slate-700 px-3 py-2 text-xs text-slate-200 hover:bg-slate-600">
-          Orientation
+        <button
+          onClick={handleOrientation}
+          className="rounded bg-slate-700 px-3 py-2 text-xs text-slate-200 hover:bg-slate-600"
+        >
+          Orientation ({rotationAxis.toUpperCase()})
         </button>
       </div>
+
+      {showWarnings && uploadedFile.warnings && uploadedFile.warnings.length > 0 && (
+        <div className="mt-2 rounded bg-yellow-100 p-2 text-xs text-yellow-800">
+          <strong>Warnings:</strong>
+          <ul className="ml-4 list-disc">
+            {uploadedFile.warnings.map((w, i) => (
+              <li key={i}>{w}</li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

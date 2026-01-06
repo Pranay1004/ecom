@@ -5,6 +5,7 @@ import { Viewer3D } from "@/components/Viewer3D";
 import { GeometryInfo } from "@/components/GeometryInfo";
 import { Configuration } from "@/components/Configuration";
 import { CostBreakdown } from "@/components/CostBreakdown";
+import { OrderSummary } from "@/components/OrderSummary";
 import { useEstimator } from "@/lib/store";
 
 export default function EstimatorPage() {
@@ -62,6 +63,9 @@ export default function EstimatorPage() {
             </div>
 
             {uploadedFile && <CostBreakdown />}
+            
+            {/* Order Summary with Checkout Button */}
+            {uploadedFile && <OrderSummary />}
           </div>
 
           {/* Center & Right: 3D + Info */}
