@@ -2,6 +2,8 @@
 
 import { useEstimator } from "@/lib/store";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { perGramBaseRates, perMaterialModifiers } from "@/lib/rates";
 
 export function OrderSummary() {
   const {
@@ -38,8 +40,19 @@ export function OrderSummary() {
     selectedTolerance === "TIGHT" ? 1.3 :
     selectedTolerance === "CRITICAL" ? 1.8 : 1;
 
+  // Weight input (grams) - user can override; default to uploadedFile.weight if present
+  const [weightGrams, setWeightGrams] = useState<number>((uploadedFile as any).weight || 50);
+
   const unitPrice = basePrice * processMultiplier * materialMultiplier * toleranceMultiplier;
-  const subtotal = unitPrice * quantity;
+  const volumeSubtotal = unitPrice * quantity;
+
+  // Weight-based material cost using per-gram rates for the selected process
+  const baseRate = perGramBaseRates[selectedProcess || "fdm"] || perGramBaseRates.fdm;
+  const materialMod = perMaterialModifiers[selectedMaterial || "pla"] || perMaterialModifiers.pla;
+  const ratePerGram = baseRate * materialMod;
+  const weightCost = ratePerGram * weightGrams * quantity;
+
+  const subtotal = volumeSubtotal + weightCost;
   const shipping = subtotal > 5000 ? 0 : 150;
   const tax = subtotal * 0.18;
   const total = subtotal + shipping + tax;
@@ -59,6 +72,9 @@ export function OrderSummary() {
       shipping,
       tax,
       total,
+      weightGrams,
+      ratePerGram,
+      weightCost,
       fileHash: uploadedFile.fileHash,
       volume: uploadedFile.volume,
       boundingBox: uploadedFile.boundingBox,
@@ -101,12 +117,34 @@ export function OrderSummary() {
           <span className="text-slate-600">Quantity</span>
           <span className="font-medium text-slate-900">{quantity}</span>
         </div>
-
+        {/* Weight input for per-gram pricing */}
+        <div className="flex items-center justify-between">
+          <div>
+            <span className="text-slate-600 block">Weight (grams)</span>
+            <input
+              type="number"
+              min={0}
+              value={weightGrams}
+              onChange={(e) => setWeightGrams(Number(e.target.value) || 0)}
+              className="mt-1 w-28 rounded-lg border border-slate-300 px-2 py-1 text-sm"
+            />
+            <div className="text-xs text-slate-400">per part</div>
+          </div>
+          <div className="text-right">
+            <div className="text-slate-600">Rate</div>
+            <div className="font-medium text-slate-900">₹{ratePerGram.toFixed(2)}/g</div>
+          </div>
+        </div>
         <hr className="my-3" />
 
         <div className="flex justify-between">
-          <span className="text-slate-600">Unit Price</span>
+          <span className="text-slate-600">Unit Price (volume-based)</span>
           <span className="font-medium text-slate-900">₹{unitPrice.toFixed(2)}</span>
+        </div>
+
+        <div className="flex justify-between">
+          <span className="text-slate-600">Material Cost (weight-based)</span>
+          <span className="font-medium text-slate-900">₹{weightCost.toFixed(2)}</span>
         </div>
 
         <div className="flex justify-between">
@@ -124,6 +162,11 @@ export function OrderSummary() {
         <div className="flex justify-between">
           <span className="text-slate-600">GST (18%)</span>
           <span className="font-medium text-slate-900">₹{tax.toFixed(2)}</span>
+        </div>
+
+        <div className="flex justify-between">
+          <span className="text-slate-600">Total weight</span>
+          <span className="font-medium text-slate-900">{(weightGrams * quantity).toFixed(0)} g</span>
         </div>
 
         <hr className="my-3" />

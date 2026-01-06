@@ -49,7 +49,10 @@ export default function PaymentPage() {
         process: item.process,
         material: item.material,
         quantity: item.quantity,
-        price: item.price,
+        unitPrice: item.unitPrice,
+        totalPrice: item.totalPrice,
+        weight: item.weight ?? 0,
+        weightCost: item.weightCost ?? 0,
       })),
       shippingAddress: {
         address: currentOrder.shipping.address,

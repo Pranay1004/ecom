@@ -9,6 +9,8 @@ export interface OrderItem {
   unitPrice: number;
   totalPrice: number;
   fileHash: string;
+  weight?: number;
+  weightCost?: number;
 }
 
 export interface ShippingInfo {

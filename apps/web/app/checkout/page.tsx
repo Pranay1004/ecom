@@ -15,6 +15,9 @@ interface OrderPreview {
   shipping: number;
   tax: number;
   total: number;
+  weightGrams?: number;
+  ratePerGram?: number;
+  weightCost?: number;
   fileHash: string;
   volume: number;
   boundingBox: { x: number; y: number; z: number };
@@ -71,6 +74,8 @@ export default function CheckoutPage() {
       unitPrice: orderPreview.unitPrice,
       totalPrice: orderPreview.subtotal,
       fileHash: orderPreview.fileHash,
+      weight: orderPreview.weightGrams ?? 0,
+      weightCost: orderPreview.weightCost ?? 0,
     };
 
     const order = createOrder([item], shipping);
