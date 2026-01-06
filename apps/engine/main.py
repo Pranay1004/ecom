@@ -5,17 +5,123 @@ Geometry analysis, complexity calculation, feasibility checking.
 """
 
 from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from pydantic import BaseModel
 from typing import List, Optional
 import numpy as np
 import tempfile
 import os
 import trimesh
-from math import acos
 import zipfile
 import xml.etree.ElementTree as ET
 
 app = FastAPI(title="Eshant Engine", version="0.1.0")
+
+# Allow CORS from localhost dev servers
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+def _load_mesh_from_bytes(content: bytes, filename: str) -> trimesh.Trimesh:
+    suffix = os.path.splitext(filename or "")[1]
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        tmp.write(content)
+        tmp_path = tmp.name
+
+    try:
+        mesh_or_scene = None
+
+        # Special-case 3MF: parse directly from ZIP/XML if trimesh doesn't support it
+        _, ext = os.path.splitext(tmp_path)
+        if ext.lower() == ".3mf":
+            try:
+                with zipfile.ZipFile(tmp_path, "r") as zf:
+                    name = None
+                    for n in zf.namelist():
+                        if n.lower().endswith("3d/3dmodel.model") or n.lower().endswith(
+                            "3dmodel.model"
+                        ):
+                            name = n
+                            break
+                    if name is None:
+                        raise Exception("No 3dmodel.model found inside 3mf")
+                    xml_bytes = zf.read(name)
+                    root = ET.fromstring(xml_bytes)
+                    ns = {"ns": root.tag.split("}")[0].strip("{")}
+                    meshes = []
+                    for obj in root.findall(".//ns:object", ns):
+                        mesh_node = obj.find(".//ns:mesh", ns)
+                        if mesh_node is None:
+                            continue
+                        verts = []
+                        for v in mesh_node.findall(".//ns:vertices/ns:vertex", ns):
+                            x = float(v.attrib.get("x", "0"))
+                            y = float(v.attrib.get("y", "0"))
+                            z = float(v.attrib.get("z", "0"))
+                            verts.append([x, y, z])
+                        faces = []
+                        for t in mesh_node.findall(".//ns:triangles/ns:triangle", ns):
+                            v1 = int(t.attrib.get("v1", "0"))
+                            v2 = int(t.attrib.get("v2", "0"))
+                            v3 = int(t.attrib.get("v3", "0"))
+                            faces.append([v1, v2, v3])
+                        if len(verts) and len(faces):
+                            m = trimesh.Trimesh(
+                                vertices=np.array(verts),
+                                faces=np.array(faces),
+                                process=True,
+                            )
+                            meshes.append(m)
+                    if len(meshes) == 0:
+                        raise Exception("No mesh parsed from 3mf")
+                    mesh_or_scene = trimesh.util.concatenate(tuple(meshes))
+            except Exception:
+                mesh_or_scene = None
+
+        if mesh_or_scene is None:
+            try:
+                mesh_or_scene = trimesh.load(tmp_path, force="mesh")
+            except Exception:
+                mesh_or_scene = trimesh.load(tmp_path)
+
+        if mesh_or_scene is None:
+            raise HTTPException(status_code=400, detail="Unable to parse geometry file")
+
+        # Normalize loader output to a single Trimesh mesh
+        if isinstance(mesh_or_scene, trimesh.Scene):
+            scene = mesh_or_scene
+            if len(scene.geometry) == 0:
+                raise HTTPException(status_code=400, detail="No geometry found in file")
+            mesh = trimesh.util.concatenate(tuple(scene.geometry.values()))
+        elif isinstance(mesh_or_scene, (list, tuple)):
+            if len(mesh_or_scene) == 0:
+                raise HTTPException(status_code=400, detail="No geometry found in file")
+            mesh = trimesh.util.concatenate(tuple(mesh_or_scene))
+        elif isinstance(mesh_or_scene, dict):
+            if len(mesh_or_scene) == 0:
+                raise HTTPException(status_code=400, detail="No geometry found in file")
+            mesh = trimesh.util.concatenate(tuple(mesh_or_scene.values()))
+        else:
+            mesh = mesh_or_scene
+
+        # Heuristic: if model dimensions seem too small (<10), assume meters and scale to mm
+        extents = mesh.bounding_box.extents
+        max_dim = float(max(extents)) if len(extents) else 0.0
+        if max_dim > 0 and max_dim < 10:
+            mesh.apply_scale(1000.0)
+
+        return mesh
+    finally:
+        try:
+            os.remove(tmp_path)
+        except Exception:
+            pass
 
 
 class GeometryMetrics(BaseModel):
@@ -44,96 +150,9 @@ async def analyze_geometry(file: UploadFile = File(...)) -> GeometryMetrics:
     Analyze uploaded 3D file and extract metrics.
     Supports STEP, STL, OBJ.
     """
-    # Save uploaded file to a temporary path
     try:
-        suffix = os.path.splitext(file.filename or "")[1]
-        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-            content = await file.read()
-            tmp.write(content)
-            tmp_path = tmp.name
-
-        # Attempt to load mesh/scene with trimesh
-        mesh_or_scene = None
-
-        # Special-case 3MF: parse directly from ZIP/XML if trimesh doesn't support it
-        _, ext = os.path.splitext(tmp_path)
-        if ext.lower() == '.3mf':
-            try:
-                with zipfile.ZipFile(tmp_path, 'r') as zf:
-                    # typical 3MF package stores model at 3D/3dmodel.model
-                    name = None
-                    for n in zf.namelist():
-                        if n.lower().endswith('3d/3dmodel.model') or n.lower().endswith('3dmodel.model'):
-                            name = n
-                            break
-                    if name is None:
-                        raise Exception('No 3dmodel.model found inside 3mf')
-                    xml_bytes = zf.read(name)
-                    # parse XML
-                    root = ET.fromstring(xml_bytes)
-                    # default namespace handling
-                    ns = {'ns': root.tag.split('}')[0].strip('{')}
-                    meshes = []
-                    for obj in root.findall('.//ns:object', ns):
-                        mesh_node = obj.find('.//ns:mesh', ns)
-                        if mesh_node is None:
-                            continue
-                        # vertices
-                        verts = []
-                        for v in mesh_node.findall('.//ns:vertices/ns:vertex', ns):
-                            x = float(v.attrib.get('x', '0'))
-                            y = float(v.attrib.get('y', '0'))
-                            z = float(v.attrib.get('z', '0'))
-                            verts.append([x, y, z])
-                        # triangles
-                        faces = []
-                        for t in mesh_node.findall('.//ns:triangles/ns:triangle', ns):
-                            v1 = int(t.attrib.get('v1', '0'))
-                            v2 = int(t.attrib.get('v2', '0'))
-                            v3 = int(t.attrib.get('v3', '0'))
-                            faces.append([v1, v2, v3])
-                        if len(verts) and len(faces):
-                            m = trimesh.Trimesh(vertices=np.array(verts), faces=np.array(faces), process=True)
-                            meshes.append(m)
-                    if len(meshes) == 0:
-                        raise Exception('No mesh parsed from 3mf')
-                    mesh_or_scene = trimesh.util.concatenate(tuple(meshes))
-            except Exception as e:
-                mesh_or_scene = None
-
-        if mesh_or_scene is None:
-            try:
-                mesh_or_scene = trimesh.load(tmp_path, force='mesh')
-            except Exception:
-                # fallback to generic load
-                mesh_or_scene = trimesh.load(tmp_path)
-
-        if mesh_or_scene is None:
-            raise HTTPException(status_code=400, detail="Unable to parse geometry file")
-
-        # Normalize loader output to a single Trimesh mesh
-        mesh = None
-        if isinstance(mesh_or_scene, trimesh.Scene):
-            scene = mesh_or_scene
-            if len(scene.geometry) == 0:
-                raise HTTPException(status_code=400, detail="No geometry found in file")
-            mesh = trimesh.util.concatenate(tuple(scene.geometry.values()))
-        elif isinstance(mesh_or_scene, list) or isinstance(mesh_or_scene, tuple):
-            if len(mesh_or_scene) == 0:
-                raise HTTPException(status_code=400, detail="No geometry found in file")
-            mesh = trimesh.util.concatenate(tuple(mesh_or_scene))
-        elif isinstance(mesh_or_scene, dict):
-            if len(mesh_or_scene) == 0:
-                raise HTTPException(status_code=400, detail="No geometry found in file")
-            mesh = trimesh.util.concatenate(tuple(mesh_or_scene.values()))
-        else:
-            mesh = mesh_or_scene
-
-        # Heuristic: if model dimensions seem too small (<10), assume meters and scale to mm
-        extents = mesh.bounding_box.extents
-        max_dim = float(max(extents)) if len(extents) else 0.0
-        if max_dim > 0 and max_dim < 10:
-            mesh.apply_scale(1000.0)
+        content = await file.read()
+        mesh = _load_mesh_from_bytes(content=content, filename=file.filename or "")
 
         # Recompute bounding box and metrics
         bbox = mesh.bounding_box.extents.tolist()
@@ -216,12 +235,6 @@ async def analyze_geometry(file: UploadFile = File(...)) -> GeometryMetrics:
         if has_overhangs:
             warnings_list.append(f"Overhangs present (~{int(overhang_fraction*100)}% faces)")
 
-        # cleanup temp file
-        try:
-            os.remove(tmp_path)
-        except Exception:
-            pass
-
         return GeometryMetrics(
             boundingBox=bounding,
             volume=volume_cm3,
@@ -233,6 +246,42 @@ async def analyze_geometry(file: UploadFile = File(...)) -> GeometryMetrics:
             minWallThickness=float(round(min_wall_thickness, 3)),
             warnings=warnings_list,
         )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/preview-stl")
+async def preview_stl(file: UploadFile = File(...)):
+    """Convert an uploaded file to STL for reliable browser preview."""
+    try:
+        content = await file.read()
+        mesh = _load_mesh_from_bytes(content=content, filename=file.filename or "")
+        stl = mesh.export(file_type="stl")
+        if isinstance(stl, str):
+            stl_bytes = stl.encode("utf-8")
+        else:
+            stl_bytes = stl
+        return Response(content=stl_bytes, media_type="model/stl")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/preview-glb")
+async def preview_glb(file: UploadFile = File(...)):
+    """Convert an uploaded file to GLB for browser preview (preferred when supported)."""
+    try:
+        content = await file.read()
+        mesh = _load_mesh_from_bytes(content=content, filename=file.filename or "")
+        glb = mesh.export(file_type="glb")
+        if isinstance(glb, str):
+            glb_bytes = glb.encode("utf-8")
+        else:
+            glb_bytes = glb
+        return Response(content=glb_bytes, media_type="model/gltf-binary")
     except HTTPException:
         raise
     except Exception as e:

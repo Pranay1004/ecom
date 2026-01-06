@@ -1,7 +1,7 @@
 "use client";
 
-import React, { Suspense, useEffect, useMemo, useState } from "react";
-import { Canvas } from "@react-three/fiber";
+import React, { Suspense, useEffect, useState } from "react";
+import { Canvas, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import { useEstimator } from "@/lib/store";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader";
@@ -11,22 +11,83 @@ import { ColladaLoader } from "three/examples/jsm/loaders/ColladaLoader";
 import { ThreeMFLoader } from "three/examples/jsm/loaders/3MFLoader";
 import * as THREE from "three";
 
-function ModelLoader({ url, ext }: { url: string; ext: string }) {
-  const [object, setObject] = useState<any>(null);
+function normalizeMaterials(root: THREE.Object3D) {
+  root.traverse((child) => {
+    const mesh = child as THREE.Mesh;
+    if ((mesh as any).isMesh) {
+      if (!mesh.material) {
+        mesh.material = new THREE.MeshStandardMaterial({
+          color: 0x8ea0b8,
+          metalness: 0.05,
+          roughness: 0.65,
+        });
+      }
+    }
+  });
+}
+
+function FitCamera({ object }: { object: THREE.Object3D | null }) {
+  const { camera } = useThree();
 
   useEffect(() => {
+    if (!object) return;
+    const box = new THREE.Box3().setFromObject(object);
+    const size = new THREE.Vector3();
+    box.getSize(size);
+
+    const maxDim = Math.max(size.x, size.y, size.z);
+    const dist = maxDim > 0 ? maxDim * 1.8 : 200;
+
+    camera.near = Math.max(0.1, dist / 1000);
+    camera.far = Math.max(1000, dist * 10);
+    // Model is centered at origin; keep controls stable by looking at (0,0,0)
+    camera.position.set(0, 0, dist);
+    camera.lookAt(0, 0, 0);
+    camera.updateProjectionMatrix();
+  }, [object, camera]);
+
+  return null;
+}
+
+function ModelLoader({
+  file,
+  url,
+  ext,
+  onLoaded,
+  onError,
+}: {
+  file?: File | null;
+  url?: string | null;
+  ext: string;
+  onLoaded: (obj: THREE.Object3D) => void;
+  onError: (err: unknown) => void;
+}) {
+  useEffect(() => {
     let cancelled = false;
-    (async () => {
+
+    const load = async () => {
       try {
-        if (!url) return;
-        const res = await fetch(url);
-        const buffer = await res.arrayBuffer();
+        // Safari sometimes throws `TypeError: Load failed` on fetch(blob:...)
+        const buffer = file
+          ? await file.arrayBuffer()
+          : url
+            ? await (await fetch(url)).arrayBuffer()
+            : null;
+
+        if (!buffer) return;
 
         if (ext === "stl") {
           const loader = new STLLoader();
           const geom = loader.parse(buffer);
-          const mesh = new THREE.Mesh(geom, new THREE.MeshStandardMaterial({ color: 0x8eaa8e }));
-          if (!cancelled) setObject(mesh);
+          const mesh = new THREE.Mesh(
+            geom,
+            new THREE.MeshStandardMaterial({
+              color: 0x8ea0b8,
+              metalness: 0.05,
+              roughness: 0.65,
+            })
+          );
+          if (!cancelled) onLoaded(mesh);
           return;
         }
 
@@ -34,59 +95,86 @@ function ModelLoader({ url, ext }: { url: string; ext: string }) {
           const loader = new OBJLoader();
           const text = new TextDecoder().decode(buffer);
           const obj = loader.parse(text);
-          if (!cancelled) setObject(obj);
-          return;
-        }
-
-        if (ext === "gltf" || ext === "glb") {
-          const loader = new GLTFLoader();
-          // GLTFLoader.parse expects ArrayBuffer and an optional path
-          loader.parse(buffer, '', (gltf:any) => {
-            if (!cancelled) setObject(gltf.scene);
-          });
+          normalizeMaterials(obj);
+          if (!cancelled) onLoaded(obj);
           return;
         }
 
         if (ext === "dae") {
           const loader = new ColladaLoader();
           const text = new TextDecoder().decode(buffer);
-          const collada = loader.parse(text);
-          if (!cancelled) setObject(collada.scene);
+          const collada = loader.parse(text, "");
+          normalizeMaterials(collada.scene);
+          if (!cancelled) onLoaded(collada.scene);
           return;
         }
 
         if (ext === "3mf") {
           const loader = new ThreeMFLoader();
           const result = loader.parse(buffer);
-          const scene = result.scene || result;
-          if (!cancelled) setObject(scene);
+          const scene = (result as any).scene || (result as any);
+          normalizeMaterials(scene);
+          if (!cancelled) onLoaded(scene);
           return;
         }
 
-        // fallback: try gltf parse
-        try {
+        if (ext === "gltf" || ext === "glb") {
           const loader = new GLTFLoader();
-          loader.parse(buffer, '', (gltf:any) => {
-            if (!cancelled) setObject(gltf.scene);
-          });
-        } catch (e) {
-          console.warn('Fallback parse failed', e);
+          loader.parse(
+            buffer,
+            "",
+            (gltf: any) => {
+              if (cancelled) return;
+              normalizeMaterials(gltf.scene);
+              onLoaded(gltf.scene);
+            },
+            (e) => {
+              if (cancelled) return;
+              onError(e);
+            }
+          );
+          return;
         }
+
+        // fallback: try GLTF
+        const loader = new GLTFLoader();
+        loader.parse(
+          buffer,
+          "",
+          (gltf: any) => {
+            if (cancelled) return;
+            normalizeMaterials(gltf.scene);
+            onLoaded(gltf.scene);
+          },
+          (e) => {
+            if (cancelled) return;
+            onError(e);
+          }
+        );
       } catch (e) {
-        console.error('Model load error', e);
+        if (!cancelled) onError(e);
       }
-    })();
+    };
+
+    load();
     return () => {
       cancelled = true;
     };
-  }, [url, ext]);
+  }, [file, url, ext, onLoaded, onError]);
 
-  if (!object) return null;
-  return <primitive object={object} />;
+  return null;
 }
 
 export function Viewer3D() {
   const { uploadedFile } = useEstimator();
+
+  const [object, setObject] = useState<THREE.Object3D | null>(null);
+  const [fallbackTried, setFallbackTried] = useState(false);
+
+  useEffect(() => {
+    setObject(null);
+    setFallbackTried(false);
+  }, [uploadedFile?.fileUrl, uploadedFile?.fileName]);
 
   if (!uploadedFile) {
     return (
@@ -96,7 +184,7 @@ export function Viewer3D() {
     );
   }
 
-  const ext = uploadedFile.fileName.split('.').pop()?.toLowerCase() || '';
+  const ext = uploadedFile.fileName.split(".").pop()?.toLowerCase() || "";
 
   return (
     <div className="rounded-xl bg-slate-900 p-4">
@@ -105,9 +193,91 @@ export function Viewer3D() {
           <ambientLight intensity={0.8} />
           <directionalLight position={[0, 0, 1]} intensity={0.6} />
           <Suspense fallback={null}>
-            <Model url={uploadedFile.fileUrl || ''} ext={ext} />
+            <ModelLoader
+              file={uploadedFile.fileObject || null}
+              url={uploadedFile.fileUrl || null}
+              ext={ext}
+              onLoaded={(obj) => {
+                // center model at origin for stable orbit controls
+                const box = new THREE.Box3().setFromObject(obj);
+                const center = new THREE.Vector3();
+                box.getCenter(center);
+                obj.position.sub(center);
+                setObject(obj);
+              }}
+              onError={async (e) => {
+                if (!fallbackTried && uploadedFile.fileObject) {
+                  setFallbackTried(true);
+                  const engineUrl =
+                    (process.env.NEXT_PUBLIC_ENGINE_URL as string) || "http://localhost:8000";
+                  // try GLB first
+                  try {
+                    const form = new FormData();
+                    form.append("file", uploadedFile.fileObject, uploadedFile.fileName);
+                    const resp = await fetch(`${engineUrl}/preview-glb`, {
+                      method: "POST",
+                      body: form,
+                    });
+                    if (resp.ok) {
+                      const buffer = await resp.arrayBuffer();
+                      const loader = new GLTFLoader();
+                      loader.parse(
+                        buffer,
+                        "",
+                        (gltf: any) => {
+                          normalizeMaterials(gltf.scene);
+                          setObject(gltf.scene);
+                        },
+                        (err) => {
+                          throw err;
+                        }
+                      );
+                      return;
+                    }
+                  } catch (glbErr) {
+                    console.warn("GLB fallback failed, trying STL", glbErr);
+                  }
+
+                  // try STL fallback
+                  try {
+                    const form2 = new FormData();
+                    form2.append("file", uploadedFile.fileObject, uploadedFile.fileName);
+                    const resp2 = await fetch(`${engineUrl}/preview-stl`, {
+                      method: "POST",
+                      body: form2,
+                    });
+                    if (resp2.ok) {
+                      const buffer2 = await resp2.arrayBuffer();
+                      const loader2 = new STLLoader();
+                      const geom = loader2.parse(buffer2);
+                      const mesh = new THREE.Mesh(
+                        geom,
+                        new THREE.MeshStandardMaterial({
+                          color: 0x8ea0b8,
+                          metalness: 0.05,
+                          roughness: 0.65,
+                        })
+                      );
+                      setObject(mesh);
+                      return;
+                    }
+                  } catch (stlErr) {
+                    console.error("STL fallback failed:", stlErr);
+                  }
+                }
+
+                const msg =
+                  (e as any)?.message ||
+                  (e as any)?.toString?.() ||
+                  "Load failed";
+                alert(msg);
+                console.error("Viewer load error:", e);
+              }}
+            />
           </Suspense>
-          <OrbitControls enablePan={true} enableZoom={true} />
+          {object ? <primitive object={object} /> : null}
+          <FitCamera object={object} />
+          <OrbitControls enablePan={true} enableZoom={true} enableDamping={true} dampingFactor={0.08} />
         </Canvas>
       </div>
 

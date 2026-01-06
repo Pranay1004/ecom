@@ -6,7 +6,7 @@ import { useEstimator } from "@/lib/store";
 export function FileUpload() {
   const [dragActive, setDragActive] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
-  const { setUploadedFile, setIsAnalyzing } = useEstimator();
+  const { uploadedFile, setUploadedFile, setIsAnalyzing } = useEstimator();
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -47,7 +47,7 @@ export function FileUpload() {
 
     try {
       const engineUrl =
-        (process.env.NEXT_PUBLIC_ENGINE_URL as string) || "http://localhost:8001";
+        (process.env.NEXT_PUBLIC_ENGINE_URL as string) || "http://localhost:8000";
       const form = new FormData();
       form.append("file", file, file.name);
 
@@ -64,6 +64,13 @@ export function FileUpload() {
       const json = await resp.json();
 
       // create local object URL for viewer
+      if (uploadedFile?.fileUrl) {
+        try {
+          URL.revokeObjectURL(uploadedFile.fileUrl);
+        } catch {
+          // ignore
+        }
+      }
       const url = URL.createObjectURL(file);
 
       setUploadedFile({
@@ -76,6 +83,7 @@ export function FileUpload() {
         complexityIndex: json.complexityIndex,
         warnings: json.warnings || [],
         fileUrl: url,
+        fileObject: file,
         hasOverhangs: json.hasOverhangs,
         minWallThickness: json.minWallThickness,
         featureCount: json.featureCount,

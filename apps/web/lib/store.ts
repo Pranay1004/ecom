@@ -10,6 +10,7 @@ interface UploadedFile {
   complexityIndex: number;
   warnings: string[];
   fileUrl?: string | null;
+  fileObject?: File | null;
   hasOverhangs?: boolean;
   minWallThickness?: number;
   featureCount?: number;
