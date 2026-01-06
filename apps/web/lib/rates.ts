@@ -15,3 +15,11 @@ export const perMaterialModifiers: Record<string, number> = {
 };
 
 export default { perGramBaseRates, perMaterialModifiers };
+
+// Material densities in g/cm³ for weight estimation
+export const materialDensities: Record<string, number> = {
+  pla: 1.25,
+  abs: 1.04,
+  nylon: 1.15,
+  resin: 1.1,
+};

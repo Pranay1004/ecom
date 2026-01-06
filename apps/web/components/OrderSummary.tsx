@@ -3,7 +3,7 @@
 import { useEstimator } from "@/lib/store";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { perGramBaseRates, perMaterialModifiers } from "@/lib/rates";
+import { perGramBaseRates, perMaterialModifiers, materialDensities } from "@/lib/rates";
 
 export function OrderSummary() {
   const {
@@ -40,8 +40,17 @@ export function OrderSummary() {
     selectedTolerance === "TIGHT" ? 1.3 :
     selectedTolerance === "CRITICAL" ? 1.8 : 1;
 
-  // Weight input (grams) - user can override; default to uploadedFile.weight if present
-  const [weightGrams, setWeightGrams] = useState<number>((uploadedFile as any).weight || 50);
+  // Determine mesh volume in cm³. uploadedFile.volume may be in mm³ for some parsers.
+  const rawVolume = (uploadedFile as any).volume || 0; // assume numeric
+  // Heuristic: if volume looks very large (> 10000) it's likely mm³; convert to cm³ by dividing by 1000
+  const volumeCm3 = rawVolume > 10000 ? rawVolume / 1000 : rawVolume;
+
+  // Default weight estimate using material density (g/cm³)
+  const density = materialDensities[selectedMaterial || "pla"] || materialDensities.pla;
+  const defaultWeight = Math.max(1, Math.round(volumeCm3 * density));
+
+  // Weight input (grams) - user can override; default to uploadedFile.weight if present otherwise estimate
+  const [weightGrams, setWeightGrams] = useState<number>((uploadedFile as any).weight || defaultWeight);
 
   const unitPrice = basePrice * processMultiplier * materialMultiplier * toleranceMultiplier;
   const volumeSubtotal = unitPrice * quantity;
