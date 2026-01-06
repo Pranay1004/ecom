@@ -1,0 +1,19 @@
+[build]
+  # Build from the apps/web workspace directory
+  base = "apps/web"
+  command = "corepack enable pnpm && pnpm install && pnpm build"
+  # Netlify Next.js plugin writes final static/SSR output here
+  publish = ".netlify/output/public"
+
+  # Example environment variables for local testing — override these in Netlify UI
+  [build.environment]
+  NEXT_PUBLIC_API_URL = "http://localhost:3000"
+  NEXT_PUBLIC_ENGINE_URL = "http://localhost:8000"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+[functions]
+  # Increase default timeout for complex server-side functions if needed
+  # (Netlify functions are used by the plugin for SSR/Edge)
+  node_bundler = "esbuild"
