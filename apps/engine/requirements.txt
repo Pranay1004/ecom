@@ -1,8 +1,7 @@
 fastapi==0.109.0
 uvicorn==0.27.0
 numpy==1.26.4
-# Use a trimesh release with prebuilt wheels compatible with Python 3.13
-trimesh==4.10.1
+trimesh==3.23.5
 pydantic==2.5.3
 python-multipart==0.0.6
 networkx==3.2
