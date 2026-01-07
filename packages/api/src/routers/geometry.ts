@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { router, publicProcedure } from "./trpc";
+import { router, publicProcedure } from "../trpc";
 
 export const geometryRouter = router({
   // Analyze uploaded file and extract metrics

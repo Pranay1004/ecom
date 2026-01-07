@@ -32,7 +32,6 @@ export const metadata: Metadata = {
   creator: "Eshant 3D",
   publisher: "Eshant 3D",
   metadataBase: new URL(siteUrl),
-  canonical: siteUrl,
   openGraph: {
     type: "website",
     locale: "en_US",
