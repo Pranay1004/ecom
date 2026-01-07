@@ -1,7 +1,7 @@
-fastapi==0.104.1
-uvicorn==0.24.0
-numpy==1.24.3
-trimesh==3.18.0
-pydantic==2.4.2
+fastapi==0.110.0
+uvicorn==0.27.0
+numpy==1.26.4
+trimesh==4.0.0
+pydantic==2.6.0
 python-multipart==0.0.6
-networkx==3.1
+networkx==3.2
