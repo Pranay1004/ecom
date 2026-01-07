@@ -1,19 +1,45 @@
 [build]
-  # Build from the apps/web workspace directory
-  base = "apps/web"
-  command = "corepack enable pnpm && pnpm install && pnpm build"
-  # Netlify Next.js plugin writes final static/SSR output here
-  publish = ".netlify/output/public"
+  command = "cd ../.. && pnpm install && pnpm build"
+  publish = "apps/web/.next"
 
-  # Example environment variables for local testing — override these in Netlify UI
-  [build.environment]
-  NEXT_PUBLIC_API_URL = "http://localhost:3000"
-  NEXT_PUBLIC_ENGINE_URL = "http://localhost:8000"
+[build.environment]
+  NODE_VERSION = "20"
 
-[[plugins]]
-  package = "@netlify/plugin-nextjs"
+[[redirects]]
+  from = "/sitemap.xml"
+  to = "/.next/static/sitemap.xml"
+  status = 200
 
-[functions]
-  # Increase default timeout for complex server-side functions if needed
-  # (Netlify functions are used by the plugin for SSR/Edge)
-  node_bundler = "esbuild"
+[[redirects]]
+  from = "/robots.txt"
+  to = "/robots.txt"
+  status = 200
+
+# API routes
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+
+# Fallback to index for SPA
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+  condition = "!{isDirWithIndex}"
+
+[headers]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "SAMEORIGIN"
+    X-XSS-Protection = "1; mode=block"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https:; frame-src 'self' https:"
+    Cache-Control = "public, max-age=3600, stale-while-revalidate=86400"
+
+[headers]
+  for = "/api/*"
+  [headers.values]
+    Cache-Control = "no-store, no-cache, must-revalidate, max-age=0"
