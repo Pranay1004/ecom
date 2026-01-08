@@ -245,6 +245,11 @@ export function Viewer3D() {
                 setObject(obj);
               }}
               onError={async (e) => {
+                // Engine fallback disabled - using client-side analysis only
+                // The engine code is preserved below but not executed
+                console.warn("Model load failed, no fallback available:", e);
+                
+                /* PRESERVED ENGINE FALLBACK CODE - NOT USED
                 if (!fallbackTried && uploadedFile.fileObject) {
                   setFallbackTried(true);
                   const engineUrl =
@@ -304,6 +309,7 @@ export function Viewer3D() {
                     console.error("STL fallback failed:", stlErr);
                   }
                 }
+                END PRESERVED ENGINE FALLBACK CODE */
 
                 const msg =
                   (e as any)?.message ||

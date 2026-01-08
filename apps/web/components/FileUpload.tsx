@@ -2,6 +2,7 @@
 
 import { useState, useRef } from "react";
 import { useEstimator } from "@/lib/store";
+import { analyzeFile } from "@/lib/geometryAnalyzer";
 
 export function FileUpload() {
   const [dragActive, setDragActive] = useState(false);
@@ -46,22 +47,8 @@ export function FileUpload() {
     setIsAnalyzing(true);
 
     try {
-      const engineUrl =
-        (process.env.NEXT_PUBLIC_ENGINE_URL as string) || "http://localhost:8000";
-      const form = new FormData();
-      form.append("file", file, file.name);
-
-      const resp = await fetch(`${engineUrl}/analyze`, {
-        method: "POST",
-        body: form,
-      });
-
-      if (!resp.ok) {
-        const text = await resp.text();
-        throw new Error(`Analysis failed: ${resp.status} ${text}`);
-      }
-
-      const json = await resp.json();
+      // Client-side geometry analysis - no engine dependency!
+      const analysis = await analyzeFile(file);
 
       // create local object URL for viewer
       if (uploadedFile?.fileUrl) {
@@ -76,17 +63,17 @@ export function FileUpload() {
       setUploadedFile({
         fileHash: Math.random().toString(36),
         fileName: file.name,
-        boundingBox: json.boundingBox,
-        volume: json.volume,
-        surfaceArea: json.surfaceArea,
-        estimatedMass: json.estimatedMass,
-        complexityIndex: json.complexityIndex,
-        warnings: json.warnings || [],
+        boundingBox: analysis.boundingBox,
+        volume: analysis.volume,
+        surfaceArea: analysis.surfaceArea,
+        estimatedMass: analysis.estimatedMass,
+        complexityIndex: analysis.complexityIndex,
+        warnings: analysis.warnings || [],
         fileUrl: url,
         fileObject: file,
-        hasOverhangs: json.hasOverhangs,
-        minWallThickness: json.minWallThickness,
-        featureCount: json.featureCount,
+        hasOverhangs: analysis.hasOverhangs,
+        minWallThickness: analysis.minWallThickness,
+        featureCount: analysis.featureCount,
       });
     } catch (err) {
       alert((err as Error).message || "Failed to analyze file");

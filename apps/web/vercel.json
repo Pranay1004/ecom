@@ -1,9 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "installCommand": "npm install --legacy-peer-deps",
-  "buildCommand": "pnpm build",
+  "buildCommand": "next build",
   "env": {
-    "NEXT_PUBLIC_SITE_URL": "https://eshant-3d.vercel.app",
-    "NEXT_PUBLIC_ENGINE_URL": "https://ecom-idmq.onrender.com"
+    "NEXT_PUBLIC_SITE_URL": "https://eshant-3d.vercel.app"
   }
 }
