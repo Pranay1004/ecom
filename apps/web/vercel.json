@@ -5,11 +5,5 @@
     "NEXT_PUBLIC_SITE_URL": "https://ecom-32dgwhx3m-pranays-projects-d8ef7548.vercel.app",
     "NEXT_PUBLIC_ENGINE_URL": "https://ecom-idmq.onrender.com"
   },
-  "regions": ["iad1"],
-  "functions": {
-    "api/**": {
-      "memory": 1024,
-      "maxDuration": 30
-    }
-  }
+  "regions": ["iad1"]
 }
