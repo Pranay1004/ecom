@@ -1,11 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "installCommand": "corepack enable && pnpm install --frozen-lockfile",
+  "framework": null,
+  "installCommand": "corepack enable && pnpm install",
   "buildCommand": "pnpm build",
   "outputDirectory": "apps/web/.next",
-  "framework": "nextjs",
   "env": {
-    "NEXT_PUBLIC_SITE_URL": "https://eshant-ecommerce.vercel.app",
+    "NEXT_PUBLIC_SITE_URL": "https://eshant-3d.vercel.app",
     "NEXT_PUBLIC_ENGINE_URL": "https://ecom-idmq.onrender.com"
   }
 }
