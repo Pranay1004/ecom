@@ -1,9 +1,0 @@
-{
-  "buildCommand": "cd ../.. && corepack enable pnpm && pnpm install && pnpm build",
-  "outputDirectory": "apps/web/.next",
-  "env": {
-    "NEXT_PUBLIC_SITE_URL": "https://ecom-32dgwhx3m-pranays-projects-d8ef7548.vercel.app",
-    "NEXT_PUBLIC_ENGINE_URL": "https://ecom-idmq.onrender.com"
-  },
-  "regions": ["iad1"]
-}
