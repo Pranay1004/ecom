@@ -73,12 +73,16 @@ export const metadata: Metadata = {
       "max-video-preview": -1,
     },
   },
-  viewport: {
+  // viewport moved to generateViewport() for Next.js App Router
+};
+
+export function generateViewport() {
+  return {
     width: "device-width",
     initialScale: 1,
     maximumScale: 5,
-  },
-};
+  };
+}
 
 export default function RootLayout({
   children,
